@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Main-Class: meteordevelopment.meteorclient.Main
+Class-Path: orbit-0.2.4.jar starscript-0.2.2.jar discord-ipc-1.1.jar ref
+ lections-0.10.2.jar netty-handler-proxy-4.1.118.Final.jar netty-codec-s
+ ocks-4.1.118.Final.jar WaybackAuthLib-1.0.1.jar launch-0.1.0.jar javass
+ ist-3.28.0-GA.jar jsr305-3.0.2.jar slf4j-api-1.7.32.jar
+

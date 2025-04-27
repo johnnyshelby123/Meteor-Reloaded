@@ -449,6 +449,7 @@ public class Modules extends System<Modules> {
     private void initMovement() {
         add(new AirJump());
         add(new Anchor());
+        add(new BouncyBoots());
         add(new AntiAFK());
         add(new AntiVoid());
         add(new AutoJump());

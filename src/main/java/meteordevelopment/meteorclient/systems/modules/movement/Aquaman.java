@@ -5,24 +5,30 @@
 
  package meteordevelopment.meteorclient.systems.modules.movement;
 
- import meteordevelopment.meteorclient.events.world.TickEvent;
- import meteordevelopment.meteorclient.settings.*;
- import meteordevelopment.meteorclient.systems.modules.Categories;
- import meteordevelopment.meteorclient.systems.modules.Module;
- import meteordevelopment.meteorclient.mixininterface.IVec3d;
  import meteordevelopment.orbit.EventHandler;
+ import meteordevelopment.meteorclient.mixininterface.IVec3d;
+ import meteordevelopment.meteorclient.events.world.TickEvent;
+ import net.minecraft.block.Blocks;
+ import net.minecraft.util.math.BlockPos;
  import net.minecraft.util.math.Vec3d;
+ import meteordevelopment.meteorclient.settings.BoolSetting;
+ import meteordevelopment.meteorclient.settings.DoubleSetting;
+ import meteordevelopment.meteorclient.systems.modules.Categories;
+ import meteordevelopment.meteorclient.settings.Setting;
+ import meteordevelopment.meteorclient.settings.SettingGroup;
+ import meteordevelopment.meteorclient.systems.modules.Module;
  
  public class Aquaman extends Module {
      private final SettingGroup sgGeneral = settings.getDefaultGroup();
+     private final SettingGroup sgSurfaceSwimming = settings.createGroup("Surface Swimming");
  
      private final Setting<Double> swimSpeed = sgGeneral.add(new DoubleSetting.Builder()
          .name("swim-speed")
          .description("How fast you move in water.")
          .defaultValue(1.5)
          .min(0.1)
-         .max(5.0)
-         .sliderRange(0.1, 5.0)
+         .max(10.0)
+         .sliderRange(0.1, 10.0)
          .build()
      );
  
@@ -40,8 +46,47 @@
          .build()
      );
  
+     private final Setting<Boolean> enableSurfaceSwimming = sgSurfaceSwimming.add(new BoolSetting.Builder()
+         .name("enable-surface-swimming")
+         .description("Positions you at the water surface when moving upward.")
+         .defaultValue(true)
+         .build()
+     );
+ 
+     private final Setting<Double> surfaceOffset = sgSurfaceSwimming.add(new DoubleSetting.Builder()
+         .name("surface-offset")
+         .description("Fine-tune your position relative to the water surface.")
+         .defaultValue(0.2)
+         .min(0.0)
+         .max(0.5)
+         .sliderRange(0.0, 0.5)
+         .visible(enableSurfaceSwimming::get)
+         .build()
+     );
+ 
+     private final Setting<Boolean> autoSurfaceWhenUp = sgSurfaceSwimming.add(new BoolSetting.Builder()
+         .name("auto-surface-when-up")
+         .description("Automatically position at surface when pressing jump key.")
+         .defaultValue(true)
+         .visible(enableSurfaceSwimming::get)
+         .build()
+     );
+ 
      public Aquaman() {
          super(Categories.Movement, "aquaman", "Enhances your swimming speed like Aquaman.");
+     }
+ 
+     private double findWaterSurfaceLevel() {
+         BlockPos playerPos = mc.player.getBlockPos();
+         for (int maxCheckDistance = 5, y = 0; y <= maxCheckDistance; ++y) {
+             BlockPos checkPos = playerPos.up(y);
+             boolean isWater = mc.world.getBlockState(checkPos).getBlock() == Blocks.WATER;
+             boolean isAir = mc.world.getBlockState(checkPos.up()).isAir();
+             if (isWater && isAir) {
+                 return checkPos.getY() + 1.0 - surfaceOffset.get();
+             }
+         }
+         return mc.player.getY();
      }
  
      @EventHandler
@@ -93,12 +138,34 @@
              moveZ += -Math.sin(Math.toRadians(mc.player.getYaw()));
          }
  
-         // Vertical movement
-         if (mc.options.jumpKey.isPressed()) {
-             moveY += 0.5;
-         }
-         if (mc.options.sneakKey.isPressed()) {
-             moveY -= 0.5;
+         // Handle vertical movement with surface swimming logic
+         boolean movingUp = mc.options.jumpKey.isPressed();
+         boolean movingDown = mc.options.sneakKey.isPressed();
+ 
+         if (enableSurfaceSwimming.get() && movingUp && autoSurfaceWhenUp.get()) {
+             double surfaceY = findWaterSurfaceLevel();
+             if (mc.player.getY() < surfaceY) {
+                 double distanceToSurface = surfaceY - mc.player.getY();
+                 if (distanceToSurface > 0.5) {
+                     moveY = 1.0;
+                 } else {
+                     moveY = distanceToSurface * 2.0;
+                 }
+             } else if (mc.player.getY() > surfaceY + 0.1) {
+                 moveY = -0.1;
+             } else {
+                 moveY = 0.0;
+                 if (constantSpeed.get()) {
+                     mc.player.setPos(mc.player.getX(), surfaceY, mc.player.getZ());
+                 }
+             }
+         } else {
+             if (movingUp) {
+                 moveY += 0.5;
+             }
+             if (movingDown) {
+                 moveY -= 0.5;
+             }
          }
  
          // Normalize the movement vector if it's not zero
@@ -136,7 +203,6 @@
  
      @Override
      public String getInfoString() {
-         return String.format("%.1fx", swimSpeed.get());
+         return String.format("%.1fx", swimSpeed.get()) + (enableSurfaceSwimming.get() ? " Surface" : "");
      }
- }
- 
+ } 

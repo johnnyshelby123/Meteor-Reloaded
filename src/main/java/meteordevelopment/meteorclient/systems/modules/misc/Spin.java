@@ -19,9 +19,9 @@
          .description("The speed at which you rotate.")
          .defaultValue(5)
          .min(0.01)
-         .max(50)
+         .max(5000)
          .sliderMin(0.01)
-         .sliderMax(50)
+         .sliderMax(5000)
          .build()
      );
  
@@ -56,3 +56,4 @@
          return String.format("%.1f", speed.get());
      }
  }
+ 
