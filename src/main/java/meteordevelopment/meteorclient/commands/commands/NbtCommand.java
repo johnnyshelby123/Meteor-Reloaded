@@ -207,70 +207,65 @@ import net.minecraft.text.HoverEvent;
          })));
  
          builder.then(literal("load").executes(context -> {
-             ItemStack stack = mc.player.getInventory().getSelectedStack();
+            ItemStack stack = mc.player.getInventory().getSelectedStack();
 
-             if (validBasic(stack)) {
-                 String clipboardContent = mc.keyboard.getClipboard();
+            if (validBasic(stack)) {
+                String clipboardContent = mc.keyboard.getClipboard();
 
-                 if (clipboardContent == null || clipboardContent.isEmpty()) {
-                     error("Clipboard is empty. Copy NBT data first using .nbt copy.");
-                     return SINGLE_SUCCESS;
-                 }
+                if (clipboardContent == null || clipboardContent.isEmpty()) {
+                    error("Clipboard is empty. Copy NBT data first using .nbt copy.");
+                    return SINGLE_SUCCESS;
+                }
 
-                 try {
-                     NbtCompound rootNbt = NbtHelper.fromNbtProviderString(clipboardContent);
+                try {
+                    NbtCompound rootNbt = NbtHelper.fromNbtProviderString(clipboardContent);
 
-                     if (!rootNbt.contains("components")) {
-                         error("No 'components' NBT tag found in clipboard data.");
-                         return SINGLE_SUCCESS;
-                     }
+                    if (!rootNbt.contains("components")) {
+                        error("No 'components' NBT tag found in clipboard data.");
+                        return SINGLE_SUCCESS;
+                    }
 
-                     NbtElement componentsElement = rootNbt.get("components");
-                     if (componentsElement == null || componentsElement.getType() != NbtElement.COMPOUND_TYPE) {
-                         error("The 'components' tag is not a valid NBT Compound.");
-                         return SINGLE_SUCCESS;
-                     }
+                    NbtElement componentsElement = rootNbt.get("components");
+                    if (componentsElement == null || componentsElement.getType() != NbtElement.COMPOUND_TYPE) {
+                        error("The 'components' tag is not a valid NBT Compound.");
+                        return SINGLE_SUCCESS;
+                    }
 
-                     NbtCompound componentsNbt = (NbtCompound) componentsElement;
+                    NbtCompound componentsNbt = (NbtCompound) componentsElement;
 
-                     // Use RegistryOps.of to create a registry-aware NbtOps
-                     var registryOps = RegistryOps.of(NbtOps.INSTANCE, mc.world.getRegistryManager());
-                     DataResult<ComponentMap> parseResult = ComponentMap.CODEC.parse(registryOps, componentsNbt);
+                    // Use RegistryOps.of for registry-aware parsing (Fix for enchantments etc.)
+                    var registryOps = RegistryOps.of(NbtOps.INSTANCE, mc.world.getRegistryManager());
+                    DataResult<ComponentMap> parseResult = ComponentMap.CODEC.parse(registryOps, componentsNbt);
 
-                     ComponentMap newComponents = parseResult.getOrThrow(errorMsg ->
-                         new CommandSyntaxException(null, Text.literal("Failed to parse components NBT: " + errorMsg))
-                     );
+                    ComponentMap newComponents = parseResult.getOrThrow(errorMsg ->
+                        new CommandSyntaxException(null, Text.literal("Failed to parse components NBT: " + errorMsg))
+                    );
 
-                     DataResult<Unit> validationResult = ItemStack.validateComponents(newComponents);
-                     validationResult.getOrThrow(MALFORMED_ITEM_EXCEPTION::create);
+                    // Validate the components from the clipboard
+                    DataResult<Unit> validationResult = ItemStack.validateComponents(newComponents);
+                    validationResult.getOrThrow(MALFORMED_ITEM_EXCEPTION::create);
 
-                     MergedComponentMap stackComponents = (MergedComponentMap) stack.getComponents();
-                     ComponentChanges.Builder changesBuilder = ComponentChanges.builder();
+                    // *** FIX FOR TEXTURES: Apply components from clipboard, merging with existing ***
+                    // This replaces the old logic that removed all existing components first.
+                    // It effectively overwrites components present in 'newComponents'
+                    // while leaving other existing components (like texture/model data) intact.
+                    stack.applyComponentsFrom(newComponents);
 
-                     Set<ComponentType<?>> types = stackComponents.getTypes();
-                     for (ComponentType<?> type : types) {
-                         changesBuilder.remove(type);
-                     }
+                    // Update the item on the server
+                    setStack(stack);
 
-                     for (Component<?> entry : newComponents) {
-                         changesBuilder.add(entry);
-                     }
+                    info("Successfully loaded and merged NBT data from clipboard to the held item.");
 
-                     stackComponents.applyChanges(changesBuilder.build());
+                } catch (CommandSyntaxException e) {
+                    error("Failed to load NBT: %s", e.getMessage());
+                } catch (Exception e) {
+                    error("An unexpected error occurred: %s", e.getMessage());
+                }
+            }
 
-                     setStack(stack);
+            return SINGLE_SUCCESS;
+        }));
 
-                     info("Successfully loaded NBT data from clipboard to the held item.");
-
-                 } catch (CommandSyntaxException e) {
-                     error("Failed to load NBT: %s", e.getMessage());
-                 } catch (Exception e) {
-                     error("An unexpected error occurred: %s", e.getMessage());
-                 }
-             }
-
-             return SINGLE_SUCCESS;
-         }));
 
      }
  
