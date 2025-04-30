@@ -429,6 +429,7 @@ public class Modules extends System<Modules> {
         add(new EXPThrower());
         add(new FakePlayer());
         add(new FastUse());
+        add(new Freeze());
         add(new GhostHand());
         add(new InstantRebreak());
         add(new LiquidInteract());

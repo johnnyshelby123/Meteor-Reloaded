@@ -9,6 +9,7 @@
  import meteordevelopment.meteorclient.settings.*;
  import meteordevelopment.meteorclient.systems.modules.Categories;
  import meteordevelopment.meteorclient.systems.modules.Module;
+ import meteordevelopment.meteorclient.utils.player.Rotations;
  import meteordevelopment.orbit.EventHandler;
  
  public class Spin extends Module {
@@ -46,9 +47,9 @@
  
          // Update yaw smoothly
          currentYaw = (currentYaw + rotationChange) % 360;
-         
-         // Apply rotation to player (visible to all)
-         mc.player.setYaw(currentYaw);
+
+         // Send rotation packet to server
+         Rotations.rotate(currentYaw, mc.player.getPitch(), -100);
      }
  
      @Override

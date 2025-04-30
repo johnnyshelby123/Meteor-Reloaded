@@ -45,16 +45,17 @@
          ));
  
          builder.then(literal("all_possible")
-             .then(literal("level").then(argument("level", IntegerArgumentType.integer()).executes(context -> {
-                 all(true, enchantment -> context.getArgument("level", Integer.class));
-                 return SINGLE_SUCCESS;
-             })))
-             .then(literal("max").executes(context -> {
-                 all(true, Enchantment::getMaxLevel);
-                 return SINGLE_SUCCESS;
-             }))
-         );
- 
+         .then(literal("level").then(argument("level", IntegerArgumentType.integer()).executes(context -> {
+             allPossibleNoCurses(enchantment -> context.getArgument("level", Integer.class));
+             return SINGLE_SUCCESS;
+         })))
+         .then(literal("max").executes(context -> {
+             allPossibleNoCurses(Enchantment::getMaxLevel);
+             return SINGLE_SUCCESS;
+         }))
+     );
+     
+
          builder.then(literal("all")
              .then(literal("level").then(argument("level", IntegerArgumentType.integer()).executes(context -> {
                  all(false, enchantment -> context.getArgument("level", Integer.class));
@@ -70,6 +71,7 @@
              allExceptCurses(600);
              return SINGLE_SUCCESS;
          }));
+         
  
          builder.then(literal("clear").executes(context -> {
              ItemStack itemStack = tryGetItemStack();
@@ -88,6 +90,23 @@
              return SINGLE_SUCCESS;
          })));
      }
+     private void allPossibleNoCurses(ToIntFunction<Enchantment> level) throws CommandSyntaxException {
+        ItemStack itemStack = tryGetItemStack();
+    
+        mc.getNetworkHandler().getRegistryManager().getOptional(RegistryKeys.ENCHANTMENT).ifPresent(registry -> {
+            registry.streamEntries().forEach(enchantment -> {
+                if (enchantment.value().isAcceptableItem(itemStack)) {
+                    String id = enchantment.registryKey().getValue().toString();
+                    if (!id.contains("curse")) {
+                        Utils.addEnchantment(itemStack, enchantment, level.applyAsInt(enchantment.value()));
+                    }
+                }
+            });
+        });
+    
+        syncItem();
+    }
+    
  
      private void one(CommandContext<CommandSource> context, ToIntFunction<Enchantment> level) throws CommandSyntaxException {
          ItemStack itemStack = tryGetItemStack();

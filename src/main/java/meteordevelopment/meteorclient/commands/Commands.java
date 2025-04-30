@@ -31,7 +31,9 @@ public class Commands {
         add(new DisconnectCommand());
         add(new DamageCommand());
         add(new DropCommand());
+        add(new KitCommand());
         add(new EnchantCommand());
+        add(new RenameCommand());
         add(new FakePlayerCommand());
         add(new FriendsCommand());
         add(new CommandsCommand());

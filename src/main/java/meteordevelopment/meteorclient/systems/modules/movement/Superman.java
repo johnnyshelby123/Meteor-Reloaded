@@ -19,23 +19,24 @@
  import meteordevelopment.meteorclient.settings.Setting;
  import meteordevelopment.meteorclient.settings.SettingGroup;
  import meteordevelopment.meteorclient.systems.modules.Module;
- 
+ import net.minecraft.util.math.Vec3d;
+
  public class Superman extends Module {
      private final SettingGroup sgGeneral;
      private final SettingGroup sgFallDamage;
-     
+
      private final Setting<Double> speed;
      private final Setting<Boolean> preventFallDamage;
      private final Setting<Boolean> alwaysPreventFallDamage;
-     
+
      private boolean sentElytraPacket;
-     
+
      public Superman() {
-         super(Categories.Movement, "superman", "Fly in the direction you're looking like Superman.");
-         
+         super(Categories.Movement, "superman", "Fly like Superman.");
+
          this.sgGeneral = this.settings.getDefaultGroup();
          this.sgFallDamage = this.settings.createGroup("Fall Damage");
-         
+
          this.speed = this.sgGeneral.add(new DoubleSetting.Builder()
              .name("speed")
              .description("Your flying speed.")
@@ -45,102 +46,105 @@
              .sliderMin(0.1)
              .sliderMax(35.0)
              .build());
-             
+
          this.preventFallDamage = this.sgFallDamage.add(new BoolSetting.Builder()
              .name("prevent-fall-damage")
              .description("Prevents fall damage when using Superman.")
              .defaultValue(true)
              .build());
-             
+
          this.alwaysPreventFallDamage = this.sgFallDamage.add(new BoolSetting.Builder()
              .name("always-prevent")
              .description("Always prevents fall damage, even when nose diving.")
              .defaultValue(true)
              .visible(preventFallDamage::get)
              .build());
-             
+
          this.sentElytraPacket = false;
      }
-     
+
      @Override
      public void onActivate() {
          this.startElytraPose();
      }
-     
+
      @Override
      public void onDeactivate() {
          this.sentElytraPacket = false;
      }
-     
+
      @EventHandler
      private void onTick(final TickEvent.Pre event) {
-         if (!this.mc.player.isAlive()) {
+         if (mc.player == null || !mc.player.isAlive()) {
              return;
          }
-         
-         if (!this.sentElytraPacket || this.mc.player.age % 40 == 0) {
+
+         if (!this.sentElytraPacket || mc.player.age % 40 == 0) {
              this.startElytraPose();
          }
-         
-         final boolean isMoving = this.mc.options.forwardKey.isPressed() || 
-                                this.mc.options.backKey.isPressed() || 
-                                this.mc.options.leftKey.isPressed() || 
-                                this.mc.options.rightKey.isPressed();
-                                
-         if (!isMoving) {
-             this.mc.player.setVelocity(0.0, 0.0, 0.0);
+
+         // Calculate movement direction based on pressed keys and look direction
+         Vec3d moveInput = Vec3d.ZERO;
+         float yaw = mc.player.getYaw();
+         float pitch = mc.player.getPitch(); // Get pitch in degrees
+
+         // Forward (W) - Use pitch and yaw
+         if (mc.options.forwardKey.isPressed()) {
+             moveInput = moveInput.add(Vec3d.fromPolar(pitch, yaw));
+         }
+         // Backward (S) - Use pitch and yaw, negated
+         if (mc.options.backKey.isPressed()) {
+             moveInput = moveInput.add(Vec3d.fromPolar(pitch, yaw).negate());
+         }
+         // Left (A) - Use only yaw
+         if (mc.options.leftKey.isPressed()) {
+             moveInput = moveInput.add(Vec3d.fromPolar(0, yaw - 90));
+         }
+         // Right (D) - Use only yaw
+         if (mc.options.rightKey.isPressed()) {
+             moveInput = moveInput.add(Vec3d.fromPolar(0, yaw + 90));
+         }
+
+         // If no keys are pressed, stop movement
+         if (moveInput.equals(Vec3d.ZERO)) {
+             mc.player.setVelocity(0.0, 0.0, 0.0);
              return;
          }
-         
-         final float yaw = this.mc.player.getYaw();
-         final float pitch = this.mc.player.getPitch();
-         final float yawRadians = yaw * 0.017453292f;
-         final float pitchRadians = pitch * 0.017453292f;
-         
-         double motionX = -MathHelper.sin(yawRadians) * MathHelper.cos(pitchRadians);
-         double motionY = -MathHelper.sin(pitchRadians);
-         double motionZ = MathHelper.cos(yawRadians) * MathHelper.cos(pitchRadians);
-         
-         final double length = Math.sqrt(motionX * motionX + motionY * motionY + motionZ * motionZ);
-         motionX /= length;
-         motionY /= length;
-         motionZ /= length;
-         
-         final double effectiveSpeed = this.speed.get();
-         motionX *= effectiveSpeed;
-         motionY *= effectiveSpeed;
-         motionZ *= effectiveSpeed;
-         
-         this.mc.player.setVelocity(motionX, motionY, motionZ);
+
+         // Normalize the combined input vector and apply speed
+         Vec3d velocity = moveInput.normalize().multiply(this.speed.get());
+
+         mc.player.setVelocity(velocity.x, velocity.y, velocity.z);
      }
-     
+
      @EventHandler
      private void onSendPacket(final PacketEvent.Send event) {
          if (!this.preventFallDamage.get()) {
              return;
          }
-         
+
          if (!(event.packet instanceof PlayerMoveC2SPacket)) {
              return;
          }
-         
+
          if (((IPlayerMoveC2SPacket)event.packet).meteor$getTag() == 1337) {
              return;
          }
-         
-         if (this.alwaysPreventFallDamage.get() || this.mc.player.getVelocity().y < -0.5) {
+
+         if (this.alwaysPreventFallDamage.get() || (mc.player != null && mc.player.getVelocity().y < -0.5)) {
              ((PlayerMoveC2SPacketAccessor)event.packet).setOnGround(true);
          }
      }
-     
+
      private void startElytraPose() {
-         this.mc.player.networkHandler.sendPacket(new ClientCommandC2SPacket(this.mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
-         this.sentElytraPacket = true;
+         if (mc.player != null && mc.player.networkHandler != null) {
+             mc.player.networkHandler.sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
+             this.sentElytraPacket = true;
+         }
      }
-     
+
      @Override
      public String getInfoString() {
          return String.format("%.1f", this.speed.get());
      }
  }
- 
