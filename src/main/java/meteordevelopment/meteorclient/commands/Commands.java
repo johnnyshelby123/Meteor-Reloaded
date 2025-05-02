@@ -54,6 +54,7 @@ public class Commands {
         add(new GamemodeCommand());
         add(new SaveMapCommand());
         add(new MacroCommand());
+        add(new SetLoreCommand());
         add(new ModulesCommand());
         add(new BindsCommand());
         add(new GiveCommand());

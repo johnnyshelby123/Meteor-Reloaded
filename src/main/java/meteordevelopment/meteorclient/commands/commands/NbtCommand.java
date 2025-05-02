@@ -51,7 +51,6 @@ public class NbtCommand extends Command {
     public void build(LiteralArgumentBuilder<CommandSource> builder) {
         builder.then(literal("copy").executes(context -> {
             ItemStack stack = mc.player.getInventory().getSelectedStack();
-            if (!validBasic(stack)) return SINGLE_SUCCESS;
         
             var registryOps = RegistryOps.of(NbtOps.INSTANCE, mc.world.getRegistryManager());
             var result = ItemStack.CODEC.encode(stack, registryOps, new NbtCompound());

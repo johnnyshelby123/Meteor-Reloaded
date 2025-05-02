@@ -13,18 +13,38 @@
  import net.minecraft.entity.player.PlayerEntity;
  import net.minecraft.util.math.Vec3d;
  import net.minecraft.util.math.BlockPos;
- 
- import java.util.ArrayList;
+
+ // Import necessary classes for Speed logic (adjust as needed)
+ import meteordevelopment.meteorclient.systems.modules.Modules;
+ import meteordevelopment.meteorclient.systems.modules.movement.speed.Speed;
+ import meteordevelopment.meteorclient.utils.player.PlayerUtils;
+ import net.minecraft.util.math.MathHelper;
+import net.minecraft.nbt.NbtCompound; // Added for explicit override
+
+import java.util.ArrayList;
  import java.util.Comparator;
  import java.util.List;
  import java.util.stream.Collectors;
- 
+
  public class TPAura extends Module {
+     // Define the movement mode enum
+     public enum MovementMode {
+         SetPos, // Existing teleport mode
+         Speed   // New mode using Speed logic
+     }
+
      private final SettingGroup sgGeneral = settings.getDefaultGroup();
      private final SettingGroup sgShape = settings.createGroup("Shape");
      private final SettingGroup sgTargeting = settings.createGroup("Targeting");
  
      // General settings
+     private final Setting<MovementMode> movementMode = sgGeneral.add(new EnumSetting.Builder<MovementMode>()
+         .name("movement-mode")
+         .description("The method used for moving around the target.")
+         .defaultValue(MovementMode.SetPos)
+         .build()
+     );
+
      private final Setting<Double> minRadius = sgGeneral.add(new DoubleSetting.Builder()
          .name("min-radius")
          .description("The minimum distance to maintain from the target player.")
@@ -220,25 +240,11 @@
              z += targetVelocity.z * predictionFactor;
          }
          
-         // Apply smart positioning (always on)
-         // Try to position behind the target relative to their looking direction
-         float targetYaw = currentTarget.getYaw();
-         double preferredAngle = Math.toRadians(targetYaw + 180);
-         
-         // Blend current position with preferred position
-         double blendFactor = 0.3; // How much to favor the preferred position
-         double currentAngle = Math.atan2(z - currentTarget.getZ(), x - currentTarget.getX());
-         double blendedAngle = currentAngle * (1 - blendFactor) + preferredAngle * blendFactor;
-         
-         double dist = Math.sqrt(Math.pow(x - currentTarget.getX(), 2) + Math.pow(z - currentTarget.getZ(), 2));
-         x = currentTarget.getX() + Math.cos(blendedAngle) * dist;
-         z = currentTarget.getZ() + Math.sin(blendedAngle) * dist;
-         
          // Update angle for next tick
          angle += speed.get() * 0.1;
          if (angle > Math.PI * 2) angle -= Math.PI * 2;
          
-         // Find safe position within radius
+         // Find safe position based on the calculated shape position (smart positioning removed)
          Vec3d safePos = findSafePosition(new Vec3d(x, y, z), currentTarget.getPos(), currentRadius);
          
          // Randomly decide whether to avoid edges
@@ -246,11 +252,73 @@
              safePos = avoidEdgePosition(safePos);
          }
          
-         // Try to teleport to new position, skip if not possible
-         try {
-             mc.player.setPosition(safePos.x, safePos.y, safePos.z);
-         } catch (Exception e) {
-             // Skip this move and continue
+         // Try to move to the new position based on the selected mode
+         if (movementMode.get() == MovementMode.SetPos) {
+             // Original SetPos logic
+             try {
+                 mc.player.setPosition(safePos.x, safePos.y, safePos.z);
+             } catch (Exception e) {
+                 // Skip this move and continue
+                 // error("Failed to set position: %s", e.getMessage()); // Optional debug
+             }
+         } else if (movementMode.get() == MovementMode.Speed) {
+             // New Speed logic: Orbital movement towards the safe position
+             Vec3d playerPos = mc.player.getPos();
+             Vec3d targetPos = currentTarget.getPos(); // Target's current position
+
+             // Vector from target to player
+             Vec3d playerRelTarget = playerPos.subtract(targetPos);
+             // Vector from target to desired safe position
+             Vec3d safePosRelTarget = safePos.subtract(targetPos);
+
+             // Calculate the angle between the player's current position relative to the target
+             // and the desired safe position relative to the target.
+             double currentAngle = Math.atan2(playerRelTarget.z, playerRelTarget.x);
+             double targetAngle = Math.atan2(safePosRelTarget.z, safePosRelTarget.x);
+
+             // Calculate the shortest angle difference (delta angle)
+             double deltaAngle = MathHelper.wrapDegrees(Math.toDegrees(targetAngle) - Math.toDegrees(currentAngle));
+
+             // Determine the direction of rotation (clockwise or counter-clockwise)
+             double rotationDirection = Math.signum(deltaAngle);
+             if (Math.abs(deltaAngle) < 1) rotationDirection = 0; // Avoid jitter if already close to target angle
+
+             // Calculate the tangential velocity direction (perpendicular to the vector from target to player)
+             double tangentialAngle = currentAngle + Math.toRadians(90 * rotationDirection);
+             Vec3d tangentialDir = new Vec3d(Math.cos(tangentialAngle), 0, Math.sin(tangentialAngle)).normalize();
+
+             // Calculate the radial velocity direction (towards or away from the target to adjust radius)
+             double desiredDist = safePosRelTarget.horizontalLength();
+             double currentDist = playerRelTarget.horizontalLength();
+             Vec3d radialDir = new Vec3d(playerRelTarget.x, 0, playerRelTarget.z).normalize(); // Horizontal direction from target to player
+             // Adjust speed based on distance difference, move faster radially if further away from desired radius
+             double radialSpeedFactor = MathHelper.clamp((desiredDist - currentDist) * 0.8, -1.0, 1.0);
+
+             // Combine tangential and radial movement
+             // Give more weight to tangential movement for orbiting, less to radial adjustment
+             double tangentialWeight = 0.9;
+             double radialWeight = 0.4; // Increased slightly for better radius correction
+
+             Vec3d combinedDir = tangentialDir.multiply(tangentialWeight).add(radialDir.multiply(radialSpeedFactor * radialWeight));
+
+             // Normalize the combined direction if it's not zero
+             if (combinedDir.lengthSquared() > 1e-6) {
+                 combinedDir = combinedDir.normalize();
+             } else if (tangentialDir.lengthSquared() > 1e-6) {
+                 // If radial adjustment cancels tangential, just use tangential
+                 combinedDir = tangentialDir;
+             } else {
+                 // If somehow both are zero, don't move horizontally
+                 combinedDir = Vec3d.ZERO;
+             }
+
+             // Apply speed
+             double speedValue = speed.get() / 20.0; // blocks/tick
+             double newVx = combinedDir.x * speedValue;
+             double newVz = combinedDir.z * speedValue;
+
+             // Keep current vertical velocity (let gravity handle Y)
+             mc.player.setVelocity(newVx, mc.player.getVelocity().y, newVz);
          }
      }
  
@@ -400,38 +468,54 @@
          }
      }
  
-     private Vec3d findSafePosition(Vec3d proposed, Vec3d targetPos, double maxRadius) {
-         // Enhanced safety checks to make it harder for enemies to hit you
-         
-         // Check if proposed position is safe
-         if (isSafePosition(proposed.x, proposed.y, proposed.z)) {
+     private Vec3d findSafePosition(Vec3d proposed, Vec3d targetPos, double desiredRadius) {
+         // Check if proposed position is safe and respects minRadius
+         double distToTarget = proposed.distanceTo(targetPos);
+         if (isSafePosition(proposed.x, proposed.y, proposed.z) && distToTarget >= minRadius.get()) {
              return proposed;
          }
-         
-         // If not safe, search for a safe position within the spherical radius
-         // Use more points for better coverage
-         for (double r = 0.5; r <= maxRadius; r += 0.5) {
-             for (double theta = 0; theta < Math.PI * 2; theta += Math.PI / 16) { // More angles
-                 for (double phi = -Math.PI / 2; phi <= Math.PI / 2; phi += Math.PI / 16) { // More vertical angles
-                     double horizontalDist = r * Math.cos(phi);
-                     double x = targetPos.x + horizontalDist * Math.cos(theta);
-                     double z = targetPos.z + horizontalDist * Math.sin(theta);
-                     double y = targetPos.y + r * Math.sin(phi);
-                     
-                     if (isSafePosition(x, y, z) && isWithinRadius(x, y, z, targetPos.x, targetPos.y, targetPos.z, maxRadius)) {
-                         return new Vec3d(x, y, z);
+
+         // If not safe or too close, search for a safe position *around* the desired radius
+         // Start searching from minRadius outwards
+         double searchRadiusStep = 0.25; // Smaller steps for finer control
+         double maxSearchRadius = maxRadius.get() + 1.0; // Search slightly beyond max radius if needed
+
+         for (double r = minRadius.get(); r <= maxSearchRadius; r += searchRadiusStep) {
+             // Check more angles around the target
+             for (double theta = 0; theta < Math.PI * 2; theta += Math.PI / 12) { // Increased angle resolution
+                 // Check vertically around the proposed Y, prioritizing it
+                 for (double yOffset = 0; yOffset <= verticalVariation.get(); yOffset += 0.5) {
+                     // Check both above and below the proposed Y
+                     double checkY1 = proposed.y + yOffset;
+                     double checkY2 = proposed.y - yOffset;
+
+                     double x = targetPos.x + r * Math.cos(theta);
+                     double z = targetPos.z + r * Math.sin(theta);
+
+                     // Check position above
+                     if (isSafePosition(x, checkY1, z)) {
+                         return new Vec3d(x, checkY1, z);
+                     }
+                     // Check position below (if different from above)
+                     if (yOffset != 0 && isSafePosition(x, checkY2, z)) {
+                         return new Vec3d(x, checkY2, z);
                      }
                  }
              }
          }
-         
-         // If no safe position found within sphere, try finding a safe Y at the same X,Z
-         double safeY = findSafeY(proposed.x, proposed.z, targetPos.y);
-         if (isWithinRadius(proposed.x, safeY, proposed.z, targetPos.x, targetPos.y, targetPos.z, maxRadius)) {
-             return new Vec3d(proposed.x, safeY, proposed.z);
+
+         // Fallback: If no safe position found respecting minRadius, try the original proposed Y at a safe XZ slightly outside minRadius
+         double fallbackRadius = minRadius.get() + 0.1;
+         double fallbackAngle = Math.atan2(proposed.z - targetPos.z, proposed.x - targetPos.x);
+         double fallbackX = targetPos.x + fallbackRadius * Math.cos(fallbackAngle);
+         double fallbackZ = targetPos.z + fallbackRadius * Math.sin(fallbackAngle);
+         if (isSafePosition(fallbackX, proposed.y, fallbackZ)) {
+             return new Vec3d(fallbackX, proposed.y, fallbackZ);
          }
-         
-         // If still no safe position, return the original proposed position
+
+         // Ultimate fallback: return original proposed position if nothing else works
+         // This might still violate minRadius, but it's better than getting stuck
+         warning("Could not find safe position respecting minRadius, using original proposed position.");
          return proposed;
      }
  
@@ -524,5 +608,16 @@
          Zigzag,
          TwoPoint,
          Random
+     }
+
+     // Explicitly override serialization methods to resolve potential inheritance conflicts
+     @Override
+     public NbtCompound toTag() {
+         return super.toTag();
+     }
+
+     @Override
+     public Module fromTag(NbtCompound tag) {
+         return super.fromTag(tag);
      }
  }
