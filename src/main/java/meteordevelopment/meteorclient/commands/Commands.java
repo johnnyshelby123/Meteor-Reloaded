@@ -62,6 +62,7 @@ public class Commands {
         add(new BindCommand());
         add(new FovCommand());
         add(new RotationCommand());
+        add(new DupeCommand());
         add(new WaypointCommand());
         add(new InputCommand());
         add(new WaspCommand());
