@@ -1,6 +1,7 @@
 package meteordevelopment.meteorclient.commands.commands;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
@@ -17,6 +18,7 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtHelper;
 import net.minecraft.nbt.NbtInt;
+import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.packet.c2s.play.CreativeInventoryActionC2SPacket;
 import net.minecraft.registry.RegistryOps;
@@ -27,7 +29,6 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Unit;
 
-import java.util.List;
 
 public class NbtCommand extends Command {
     private static final DynamicCommandExceptionType MALFORMED_ITEM_EXCEPTION = new DynamicCommandExceptionType(
@@ -49,40 +50,58 @@ public class NbtCommand extends Command {
     @Override
     public void build(LiteralArgumentBuilder<CommandSource> builder) {
         builder.then(literal("copy").executes(context -> {
-            DataCommandObject dataCommandObject = new EntityDataObject(mc.player);
-            NbtPathArgumentType.NbtPath handPath = NbtPathArgumentType.NbtPath.parse("SelectedItem");
-
-            MutableText text = Text.empty().append(copyButton);
-            String nbt = "{}";
-
-            try {
-                List<NbtElement> nbtElement = handPath.get(dataCommandObject.getNbt());
-                if (!nbtElement.isEmpty()) {
-                    text.append(" ").append(NbtHelper.toPrettyPrintedText(nbtElement.getFirst()));
-                    nbt = nbtElement.getFirst().toString();
-                }
-            } catch (CommandSyntaxException e) {
-                text.append("{}");
+            ItemStack stack = mc.player.getInventory().getSelectedStack();
+            if (!validBasic(stack)) return SINGLE_SUCCESS;
+        
+            var registryOps = RegistryOps.of(NbtOps.INSTANCE, mc.world.getRegistryManager());
+            var result = ItemStack.CODEC.encode(stack, registryOps, new NbtCompound());
+        
+            if (result.result().isEmpty()) {
+                error("Failed to encode item NBT.");
+                return SINGLE_SUCCESS;
             }
+        
+            NbtCompound nbt = (NbtCompound) result.result().get();
 
-            mc.keyboard.setClipboard(nbt);
-
-            text.append(" data copied!");
+            mc.keyboard.setClipboard(nbt.toString());
+        
+            MutableText text = Text.empty()
+                .append(copyButton)
+                .append(" ")
+                .append(NbtHelper.toPrettyPrintedText(nbt))
+                .append(" data copied!");
+        
             info(text);
-
             return SINGLE_SUCCESS;
         }));
+        
+        
 
-        builder.then(literal("add").then(
-            // Unbreakable subcommand
-            literal("unbreakable").executes(context -> {
-                ItemStack stack = mc.player.getInventory().getSelectedStack();
+        builder.then(literal("add")
+            .then(argument("tag", StringArgumentType.word())
+                .executes(context -> {
+                    String tag = StringArgumentType.getString(context, "tag");
+                    ItemStack stack = mc.player.getInventory().getSelectedStack();
 
-                if (validBasic(stack)) {
+                    if (!validBasic(stack)) {
+                        info("Invalid item stack.");
+                        return 0; // Returning success with no action taken
+                    }
+
                     try {
                         NbtCompound componentsNbt = new NbtCompound();
-                        componentsNbt.put("minecraft:unbreakable", new NbtCompound());
 
+                        switch (tag) {
+                            case "unbreakable" -> componentsNbt.put("minecraft:unbreakable", new NbtCompound());
+                            case "consumable" -> {
+                                NbtCompound consumable = new NbtCompound();
+                                consumable.put("on_consume_effects", new NbtList()); // Empty effect array for later addition
+                                componentsNbt.put("minecraft:consumable", consumable);
+                            }
+                            default -> throw new CommandSyntaxException(null, Text.literal("Support for tag '" + tag + "' not added yet."));
+                        }
+
+                        // Parse components NBT
                         var registryOps = RegistryOps.of(NbtOps.INSTANCE, mc.world.getRegistryManager());
                         DataResult<ComponentMap> parseResult = ComponentMap.CODEC.parse(registryOps, componentsNbt);
 
@@ -90,37 +109,105 @@ public class NbtCommand extends Command {
                             new CommandSyntaxException(null, Text.literal("Failed to parse components NBT: " + errorMsg))
                         );
 
+                        // Validate the components
                         DataResult<Unit> validationResult = ItemStack.validateComponents(newComponents);
                         validationResult.getOrThrow(MALFORMED_ITEM_EXCEPTION::create);
 
-                        // Apply the new components, preserving existing ones (original behaviour for 'add')
+                        // Apply components to the item stack
                         stack.applyComponentsFrom(newComponents);
                         setStack(stack);
 
-                        info("Successfully added unbreakable tag to the held item.");
+                        info("Successfully added %s tag to the held item.", tag);
                     } catch (CommandSyntaxException e) {
-                        error("Failed to add unbreakable tag: %s", e.getMessage());
+                        error("Failed to add tag: %s", e.getMessage());
+                        return 0; // Return with error
                     } catch (Exception e) {
-                        error("An unexpected error occurred: %s", e.getMessage());
+                        error("Unexpected error: %s", e.getMessage());
+                        return 0; // Return with error
                     }
-                }
 
+                    return 1; // Success
+                })
+            )
+        );
+
+        builder.then(literal("setitemmodel")
+        .then(argument("model", StringArgumentType.word())
+            .executes(context -> {
+                String model = StringArgumentType.getString(context, "model");
+                ItemStack stack = mc.player.getInventory().getSelectedStack();
+    
+                if (!validBasic(stack)) return SINGLE_SUCCESS;
+    
+                try {
+                    NbtCompound componentsNbt = new NbtCompound();
+    
+                    if (!"null".equalsIgnoreCase(model)) {
+                        componentsNbt.putString("minecraft:item_model", "minecraft:" + model);
+                    }
+    
+                    var registryOps = RegistryOps.of(NbtOps.INSTANCE, mc.world.getRegistryManager());
+                    DataResult<ComponentMap> parseResult = ComponentMap.CODEC.parse(registryOps, componentsNbt);
+    
+                    ComponentMap parsedComponents = parseResult.getOrThrow(errorMsg ->
+                        new CommandSyntaxException(null, Text.literal("Failed to parse components NBT: " + errorMsg))
+                    );
+    
+                    DataResult<Unit> validationResult = ItemStack.validateComponents(parsedComponents);
+                    validationResult.getOrThrow(MALFORMED_ITEM_EXCEPTION::create);
+    
+                    stack.applyComponentsFrom(parsedComponents);
+                    setStack(stack);
+    
+                    info("Successfully set the item model to: %s", model);
+                } catch (CommandSyntaxException e) {
+                    error("Failed to apply item model: %s", e.getMessage());
+                } catch (Exception e) {
+                    error("Unexpected error: %s", e.getMessage());
+                }
+    
                 return SINGLE_SUCCESS;
             })
-        ));
+        )
+    );
+    
+    
+    
 
-        builder.then(literal("count").then(argument("count", IntegerArgumentType.integer(-127, 127)).executes(context -> {
+    
+            
+
+        builder.then(literal("count").then(argument("count", IntegerArgumentType.integer(1, 127)).executes(context -> {
             ItemStack stack = mc.player.getInventory().getSelectedStack();
-
+        
             if (validBasic(stack)) {
                 int count = IntegerArgumentType.getInteger(context, "count");
+        
+                // Set actual count
                 stack.setCount(count);
+        
+                // Inject max_stack_size into components
+                NbtCompound components = new NbtCompound();
+                components.put("minecraft:max_stack_size", NbtInt.of(count));
+        
+                NbtCompound root = new NbtCompound();
+                root.put("components", components);
+        
+                var registryOps = RegistryOps.of(NbtOps.INSTANCE, mc.world.getRegistryManager());
+                var parseResult = ComponentMap.CODEC.parse(registryOps, components);
+                ComponentMap compMap = parseResult.getOrThrow(msg -> new CommandSyntaxException(null, Text.literal(msg)));
+        
+                stack.applyComponentsFrom(compMap);
                 setStack(stack);
-                info("Set mainhand stack count to %s.", count);
+        
+                info("Set count and max_stack_size to %s.", count);
             }
-
+        
             return SINGLE_SUCCESS;
         })));
+        
+        
+        
 
         // Original load command (using applyComponentsFrom)
         builder.then(literal("load").executes(context -> {
@@ -176,6 +263,7 @@ public class NbtCommand extends Command {
 
             return SINGLE_SUCCESS;
         }));
+        
         builder.then(literal("loadinvis").executes(context -> {
             ItemStack stack = mc.player.getInventory().getSelectedStack();
         
