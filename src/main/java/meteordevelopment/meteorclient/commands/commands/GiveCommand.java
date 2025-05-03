@@ -46,10 +46,20 @@ public class GiveCommand extends Command {
     }
 
     private void giveItem(ItemStack item) throws CommandSyntaxException {
+        // Try hotbar first (slots 0 to 8)
         FindItemResult fir = InvUtils.find(ItemStack::isEmpty, 0, 8);
+    
+        // If no space in hotbar, search the main inventory (slots 9 to 35)
+        if (!fir.found()) {
+            fir = InvUtils.find(ItemStack::isEmpty, 9, 35);
+        }
+    
+        // If still no space, throw an error
         if (!fir.found()) throw NO_SPACE.create();
-
+    
+        // Send packet to give the item to the found slot
         mc.getNetworkHandler().sendPacket(new CreativeInventoryActionC2SPacket(36 + fir.slot(), item));
         mc.player.playerScreenHandler.getSlot(36 + fir.slot()).setStack(item);
     }
+    
 }

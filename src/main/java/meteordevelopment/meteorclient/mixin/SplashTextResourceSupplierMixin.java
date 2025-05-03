@@ -33,8 +33,8 @@
          if (override) cir.setReturnValue(new SplashTextRenderer(meteorSplashes.get(random.nextInt(meteorSplashes.size()))));
          override = !override;
      }
- 
-     @Unique
+
+    @Unique
      private static List<String> getMeteorSplashes() {
          return List.of(
                  "Meteor Reloaded!",
@@ -43,9 +43,11 @@
                  "§6Johnny §fbased god",
                  "§4Pirating is morally justified!",
                  "§4IM bout to CRASH OUT",
-                 "§6Meteor on Crack!"
+                 "§6Meteor on Crack!",
+                 "Once you go black, YOU NEVER GO BACK!",
+                 "I aint gay but $20 is $20",
+                 "Aint no party like a Diddy party! "
          );
      }
  
  }
- 
