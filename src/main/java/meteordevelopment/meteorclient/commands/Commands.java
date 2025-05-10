@@ -40,11 +40,13 @@ public class Commands {
         add(new InventoryCommand());
         add(new NbtCommand());
         add(new NotebotCommand());
+        add(new CoordsCommand());
         add(new PeekCommand());
         add(new EnderChestCommand());
         add(new ProfilesCommand());
         add(new ReloadCommand());
         add(new ResetCommand());
+        add(new RepairCommand());
         add(new SayCommand());
         add(new ServerCommand());
         add(new SwarmCommand());
