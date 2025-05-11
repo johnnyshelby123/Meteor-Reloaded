@@ -22,7 +22,7 @@ A fork of Meteor Client with new modules, commands, and NBT enhancements.
 - `.nbt loadinvis` – load NBT and make item invisible
 - `.kit` – gives predefined kits (easy to extend with wrapper)- added custom kitloading support
 - `.repair` - repairs a tool (creative mode only)
--`.coords` - returns location
+- `.coords` - returns location
 
 ## Building
 
