@@ -12,13 +12,17 @@ A fork of Meteor Client with new modules, commands, and NBT enhancements.
   - **Gravity Control** – adjust gravity strength
   - **Spin** – adds a spin animation
   - **Bouncy Boots** – makes blocks/entities bouncy (configurable with slider)
+  - **GODMODE** - automatically splashes health pots when your health gets too low (configurable)
+  - **SAVE DEATH** - automatically copies coords of death spot to clipboard
 
 ## New Commands
 
 - `.rename` – rename items with creative flair options
 - `.nbt load` – load NBT data into items
 - `.nbt loadinvis` – load NBT and make item invisible
-- `.kit` – gives predefined kits (easy to extend with wrapper)
+- `.kit` – gives predefined kits (easy to extend with wrapper)- added custom kitloading support
+- `.repair` - repairs a tool (creative mode only)
+-`.coords` - returns location
 
 ## Building
 
