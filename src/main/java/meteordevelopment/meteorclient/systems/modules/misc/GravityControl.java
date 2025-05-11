@@ -19,9 +19,9 @@
          .name("gravity-multiplier")
          .description("Gravity strength. 1.0 = normal, 0.2 = 20% of normal, 4.0 = 4x stronger.")
          .defaultValue(1.0)
-         .min(0.2)
-         .max(4.0)
-         .sliderRange(0.2, 4.0)
+         .min(0.01)
+         .max(8.0)
+         .sliderRange(0.01, 8.0)
          .build()
      );
  
