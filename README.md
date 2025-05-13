@@ -25,6 +25,7 @@ A fork of Meteor Client with new modules, commands, and NBT enhancements.
 - `.repair` - repairs a tool (creative mode only)
 - `.coords` - returns location
 - `.surface` - teleports you to the nearest surface above you
+- `.tp` - uses pathfinding to teleport to a player up to 120 blocks away
 
 ## Building
 
