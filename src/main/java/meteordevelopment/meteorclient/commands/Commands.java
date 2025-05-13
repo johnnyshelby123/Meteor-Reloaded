@@ -59,6 +59,7 @@ public class Commands {
         add(new SetLoreCommand());
         add(new ModulesCommand());
         add(new BindsCommand());
+        add(new SurfaceCommand());
         add(new GiveCommand());
         add(new NameHistoryCommand());
         add(new BindCommand());

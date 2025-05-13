@@ -58,7 +58,7 @@
                  "Get good, get Meteor!",
                  "§cCracked by the best!",
                  "§eDon't tell Mojang!",
-                 "Oy Vey, mr Goldstein",
+                 "§4Oy Vey, mr Goldstein",
                  "§bAll lives Matter",
                  "§aGreen text > everything",
                  "§dSus among us?",

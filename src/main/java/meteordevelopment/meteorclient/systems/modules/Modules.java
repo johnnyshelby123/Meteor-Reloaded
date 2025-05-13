@@ -388,6 +388,7 @@ public class Modules extends System<Modules> {
     private void initCombat() {
         add(new AnchorAura());
         add(new GodMode());
+        add(new StayBehind());
         add(new AntiAnvil());
         add(new AntiBed());
         add(new ArrowDodge());

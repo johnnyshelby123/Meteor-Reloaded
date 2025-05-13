@@ -14,6 +14,7 @@ A fork of Meteor Client with new modules, commands, and NBT enhancements.
   - **Bouncy Boots** – makes blocks/entities bouncy (configurable with slider)
   - **GODMODE** - automatically splashes health pots when your health gets too low (configurable)
   - **SAVE DEATH** - automatically copies coords of death spot to clipboard
+  - **Stay Behind** - locks you behind a target so you can hit them when they cant hit you
 
 ## New Commands
 
@@ -23,6 +24,7 @@ A fork of Meteor Client with new modules, commands, and NBT enhancements.
 - `.kit` – gives predefined kits (easy to extend with wrapper)- added custom kitloading support
 - `.repair` - repairs a tool (creative mode only)
 - `.coords` - returns location
+- `.surface` - teleports you to the nearest surface above you
 
 ## Building
 
